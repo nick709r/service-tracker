@@ -38,6 +38,7 @@ async function login(){
     document.getElementById('user-area').innerText = `Logged in as ${currentUser}`;
     await loadServices();
     await loadEmailSettings();
+    await loadHomeAssistantNetworkStatus();
   }catch(e){
     alert('Login failed');
   }
@@ -105,18 +106,37 @@ async function loadAgentDvrCameras(){
       panel.innerHTML = '<div class="text-sm text-gray-500">No cameras found. Make sure Agent DVR is running and reachable.</div>';
       return;
     }
-    panel.innerHTML = cameras.map(camera => `
-      <div class="border rounded p-2 bg-gray-50">
-        <div class="flex items-center justify-between mb-2">
-          <span class="font-medium">${camera.name}</span>
-          <span class="text-xs px-2 py-1 rounded ${camera.online ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-            ${camera.online ? 'Online' : 'Offline'}
-          </span>
+    panel.innerHTML = cameras.map(camera => {
+      const detailPairs = Array.isArray(camera.details) ? camera.details : [];
+      const detailHtml = detailPairs.length ? `
+        <div class="mt-2 grid grid-cols-2 gap-2 text-[11px] text-gray-700">
+          ${detailPairs.map(detail => `
+            <div class="border rounded px-2 py-1 bg-white">
+              <span class="text-gray-500">${detail.label}:</span>
+              <span class="ml-1 font-medium">${detail.value}</span>
+            </div>
+          `).join('')}
         </div>
-        ${camera.snapshot_url ? `<img src="${camera.snapshot_url}" alt="${camera.name} snapshot" class="w-full h-32 object-cover rounded border" />` : '<div class="text-xs text-gray-500">No snapshot available</div>'}
-        <div class="mt-2 text-xs text-gray-600">${camera.recording ? 'Recording' : 'Idle'} • ${camera.status || 'unknown'}</div>
-      </div>
-    `).join('');
+      ` : '';
+      return `
+        <div class="border rounded p-2 bg-gray-50">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-medium">${camera.name}</span>
+            <span class="text-xs px-2 py-1 rounded ${camera.online ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+              ${camera.online ? 'Online' : 'Offline'}
+            </span>
+          </div>
+          ${camera.snapshot_url ? `<img src="${camera.snapshot_url}" alt="${camera.name} snapshot" class="w-full h-32 object-cover rounded border" />` : '<div class="text-xs text-gray-500">No snapshot available</div>'}
+          <div class="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
+            <span class="px-2 py-1 rounded ${camera.recording ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-700'}">${camera.recording ? 'Recording' : 'Idle'}</span>
+            <span class="px-2 py-1 rounded ${camera.motion_detected ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-700'}">${camera.motion_detected ? 'Motion detected' : 'No motion'}</span>
+            <span class="px-2 py-1 rounded bg-gray-200 text-gray-700">${camera.status || 'unknown'}</span>
+          </div>
+          ${detailHtml}
+          ${camera.stream_url ? `<div class="mt-2 text-[11px] text-gray-600 break-all">Stream: ${camera.stream_url}</div>` : ''}
+        </div>
+      `;
+    }).join('');
   }catch(err){
     const panel = document.getElementById('agentdvr-cameras');
     if(panel){
@@ -161,24 +181,32 @@ async function loadServices(){
     const st = document.getElementById('status-' + id);
     const service = list.find(item => item.id === id);
     if(!service || !(service.url || '').trim()){
-      st.innerText = 'Add a URL to begin monitoring.';
+      st.innerHTML = '<span class="inline-flex items-center gap-2 text-yellow-700"><span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span> Add a URL to begin monitoring.</span>';
       return;
     }
-    st.innerText = 'Checking...';
+    st.innerHTML = '<span class="inline-flex items-center gap-2 text-gray-600"><span class="w-2.5 h-2.5 rounded-full bg-gray-400 animate-pulse"></span> Checking...</span>';
     try{
       const r = await api(`/services/${id}/status`);
-      let statusText = r.status === 'reachable'
-        ? `Reachable (${r.code})`
-        : (r.status === 'no_url' ? 'No URL configured' : `${r.status} (${r.code || 'n/a'})`);
-      if(r.status === 'unreachable' && r.error){
-        statusText += ` — ${r.error}`;
-      }
-      st.innerText = `${statusText}${r.final_url ? ` → ${r.final_url}` : ''}`;
+      const isReachable = r.status === 'reachable';
+      const isNoUrl = r.status === 'no_url';
+      const statusLabel = isReachable ? 'Reachable' : (isNoUrl ? 'No URL configured' : r.status || 'Unknown');
+      const statusTone = isReachable ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200';
+      const statusDot = isReachable ? 'bg-green-500' : 'bg-red-500';
+      const detailText = r.status === 'unreachable' && r.error ? ` — ${r.error}` : '';
+      st.innerHTML = `
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="inline-flex items-center gap-2 px-2 py-1 rounded-full ${statusTone}">
+            <span class="w-2.5 h-2.5 rounded-full ${statusDot}"></span>
+            ${isReachable ? '✓' : '✕'} ${statusLabel}
+          </span>
+          <span class="text-xs text-gray-600">${r.code || 'n/a'}${detailText}${r.final_url ? ` → ${r.final_url}` : ''}</span>
+        </div>
+      `;
       if(id === 'agentdvr' || id === 'agent-dvr') {
         await loadAgentDvrCameras();
       }
     }catch(err){
-      st.innerText = `Error — ${err.message || 'request failed'}`;
+      st.innerHTML = '<span class="inline-flex items-center gap-2 text-red-700"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> Error — ' + (err.message || 'request failed') + '</span>';
     }
   }));
 
@@ -244,6 +272,7 @@ async function saveHA(){
   const url = document.getElementById('ha-url').value;
   const token = document.getElementById('ha-token').value;
   await api('/home_assistant', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({url,token})});
+  await loadHomeAssistantNetworkStatus();
   alert('Saved');
 }
 
@@ -251,8 +280,81 @@ async function checkHA(){
   try{
     const r = await api('/home_assistant/check');
     document.getElementById('ha-status').innerText = JSON.stringify(r);
+    await loadHomeAssistantNetworkStatus();
   }catch(e){
     document.getElementById('ha-status').innerText = 'Not configured or unreachable';
+  }
+}
+
+async function loadHomeAssistantNetworkStatus(){
+  const summaryEl = document.getElementById('ha-network-summary');
+  const detailsEl = document.getElementById('ha-network-details');
+  if (!summaryEl || !detailsEl) return;
+
+  try {
+    const summary = await api('/home_assistant/network');
+    const zigbee = summary.zigbee || {};
+    const bluetooth = summary.bluetooth || {};
+    const network = summary.network || {};
+
+    const summarize = (label, item, accent = 'gray') => {
+      const state = String(item?.status || 'unknown').toLowerCase();
+      const tone = state === 'online' ? 'bg-green-100 text-green-700' : state === 'offline' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700';
+      return `
+        <div class="border rounded p-3 bg-gray-50">
+          <div class="text-xs uppercase tracking-wide text-gray-500">${label}</div>
+          <div class="mt-2 inline-block rounded px-2 py-1 text-sm font-semibold ${tone}">${state}</div>
+          <div class="mt-2 text-xs text-gray-600">${item?.count ?? 0} entities</div>
+        </div>
+      `;
+    };
+
+    const networkStatus = network.connected > 0 ? 'text-green-700' : 'text-red-700';
+    summaryEl.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+        ${summarize('Zigbee', zigbee)}
+        ${summarize('Bluetooth', bluetooth)}
+        <div class="border rounded p-3 bg-gray-50">
+          <div class="text-xs uppercase tracking-wide text-gray-500">Network devices</div>
+          <div class="mt-2 text-lg font-semibold ${networkStatus}">${network.connected ?? 0} connected</div>
+          <div class="mt-2 text-xs text-gray-600">${network.disconnected ?? 0} disconnected / ${network.total ?? 0} total</div>
+        </div>
+      </div>
+    `;
+
+    const renderList = (items, emptyText) => {
+      if (!Array.isArray(items) || !items.length) {
+        return `<div class="text-sm text-gray-500">${emptyText}</div>`;
+      }
+      return items.map(item => `
+        <div class="border rounded p-2 bg-gray-50">
+          <div class="font-medium">${item.friendly_name || item.entity_id || 'Unknown'}</div>
+          <div class="text-xs text-gray-600">${item.entity_id || 'unknown'} • ${item.state || 'unknown'}</div>
+        </div>
+      `).join('');
+    };
+
+    detailsEl.classList.remove('hidden');
+    detailsEl.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        <div>
+          <h4 class="font-semibold mb-2">Zigbee</h4>
+          <div class="space-y-2">${renderList(zigbee.items, 'No Zigbee entities found.')}</div>
+        </div>
+        <div>
+          <h4 class="font-semibold mb-2">Bluetooth</h4>
+          <div class="space-y-2">${renderList(bluetooth.items, 'No Bluetooth entities found.')}</div>
+        </div>
+        <div>
+          <h4 class="font-semibold mb-2">Network devices</h4>
+          <div class="space-y-2">${renderList(network.devices, 'No network device data found.')}</div>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    summaryEl.innerHTML = '<div class="text-sm text-gray-500 mt-3">Home Assistant network summary unavailable yet.</div>';
+    detailsEl.innerHTML = '';
+    detailsEl.classList.add('hidden');
   }
 }
 
@@ -301,6 +403,15 @@ function setupUI(){
   document.getElementById('add-service-btn').addEventListener('click', addService);
   document.getElementById('ha-save').addEventListener('click', saveHA);
   document.getElementById('ha-check').addEventListener('click', checkHA);
+  const networkToggle = document.getElementById('network-details-toggle');
+  if (networkToggle) {
+    networkToggle.addEventListener('click', () => {
+      const details = document.getElementById('ha-network-details');
+      if (!details) return;
+      const hidden = details.classList.toggle('hidden');
+      networkToggle.innerText = hidden ? 'Show details' : 'Hide details';
+    });
+  }
   document.getElementById('email-save').addEventListener('click', saveEmailSettings);
 }
 

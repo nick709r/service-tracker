@@ -3,8 +3,7 @@ version: '3.8'
 services:
   backend:
     build: ./backend
-    ports:
-      - "6868:6868"
+    network_mode: host
     volumes:
       - ./backend/data:/app/data
     environment:
@@ -12,9 +11,9 @@ services:
 
   frontend:
     build: ./frontend
-    ports:
-      - "6969:80"
+    network_mode: host
     depends_on:
       - backend
 
-# Optional: add a reverse-proxy service (traefik/nginx) later
+# Host networking allows the monitor to reach services on the same LAN as the host.
+# This avoids the Docker bridge network isolation that prevents local-network checks.

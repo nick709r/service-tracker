@@ -378,21 +378,62 @@ async def _agent_dvr_camera_data(base_url: str, api_key: str | None = None):
                         for camera in items:
                             if not isinstance(camera, dict):
                                 continue
-                            camera_id = str(camera.get("id") or camera.get("cameraId") or camera.get("deviceId") or camera.get("ID") or "").strip()
-                            name = camera.get("name") or camera.get("cameraName") or camera.get("label") or f"Camera {camera_id or len(result)+1}"
-                            status = camera.get("status") or camera.get("state") or camera.get("recordingState") or ("online" if camera.get("isOnline") or camera.get("isConnected") else "offline")
-                            snapshot = camera.get("snapshotUrl") or camera.get("snapshot_url") or camera.get("snapshot") or camera.get("image") or camera.get("thumbnail")
-                            if snapshot and not snapshot.startswith("http"):
-                                snapshot = f"{base_url.rstrip('/')}/{snapshot.lstrip('/')}"
+                            def pick(*values):
+                                for value in values:
+                                    if value is None:
+                                        continue
+                                    if isinstance(value, str) and value.strip() == "":
+                                        continue
+                                    return value
+                                return None
+
+                            camera_id = str(pick(camera.get("id"), camera.get("cameraId"), camera.get("deviceId"), camera.get("ID"), camera.get("camera_id")) or "").strip()
+                            name = pick(camera.get("name"), camera.get("cameraName"), camera.get("label"), camera.get("title"), f"Camera {camera_id or len(result)+1}")
+                            status = pick(camera.get("status"), camera.get("state"), camera.get("recordingState"), camera.get("cameraStatus"), "online" if camera.get("isOnline") or camera.get("isConnected") else "offline")
+                            online = bool(camera.get("isOnline") or camera.get("isConnected") or str(status).lower() in {"online", "connected", "recording", "active"})
+                            recording = bool(camera.get("isRecording") or camera.get("recording") or camera.get("isRecordingNow") or str(status).lower() in {"recording"})
+                            motion_detected = bool(camera.get("isMotionDetected") or camera.get("motionDetected") or camera.get("motion") or camera.get("motionDetected") or camera.get("isMotion") or str(status).lower() in {"motion", "motion_detected"})
+                            snapshot = pick(camera.get("snapshotUrl"), camera.get("snapshot_url"), camera.get("snapshot"), camera.get("image"), camera.get("thumbnail"), camera.get("snapshotUrl"))
+                            stream_url = pick(camera.get("streamUrl"), camera.get("stream_url"), camera.get("rtsp"), camera.get("uri"), camera.get("url"))
+                            if snapshot and not str(snapshot).startswith("http"):
+                                snapshot = f"{base_url.rstrip('/')}/{str(snapshot).lstrip('/')}"
                             if camera_id and not snapshot:
                                 snapshot = f"{base_url.rstrip('/')}/api/cameras/{camera_id}/snapshot"
+                            if stream_url and not str(stream_url).startswith("http"):
+                                stream_url = f"{base_url.rstrip('/')}/{str(stream_url).lstrip('/')}"
+
+                            width = pick(camera.get("width"), camera.get("imageWidth"), camera.get("streamWidth"))
+                            height = pick(camera.get("height"), camera.get("imageHeight"), camera.get("streamHeight"))
+                            resolution = None
+                            if width or height:
+                                resolution = f"{width}x{height}" if width and height else (str(width) if width else str(height))
+
+                            details = []
+                            for label, value in [
+                                ("Status", status),
+                                ("Online", "Yes" if online else "No"),
+                                ("Recording", "Yes" if recording else "No"),
+                                ("Motion", "Detected" if motion_detected else "Idle"),
+                                ("Resolution", resolution),
+                                ("FPS", pick(camera.get("fps"), camera.get("frameRate"), camera.get("frame_rate"))),
+                                ("Channel", pick(camera.get("channel"), camera.get("channelNumber"), camera.get("channel_number"))),
+                                ("Codec", pick(camera.get("codec"), camera.get("videoCodec"), camera.get("video_codec"))),
+                                ("Address", pick(camera.get("address"), camera.get("host"), camera.get("ip"))),
+                            ]:
+                                if value is not None:
+                                    details.append({"label": label, "value": str(value)})
+
                             result.append({
                                 "id": camera_id,
-                                "name": name,
+                                "name": str(name),
                                 "status": str(status).lower(),
-                                "online": bool(camera.get("isOnline") or camera.get("isConnected") or str(status).lower() in {"online", "connected", "recording"}),
-                                "recording": bool(camera.get("isRecording") or camera.get("recording") or str(status).lower() in {"recording"}),
+                                "online": bool(online),
+                                "recording": bool(recording),
+                                "motion_detected": bool(motion_detected),
                                 "snapshot_url": snapshot,
+                                "stream_url": stream_url,
+                                "resolution": resolution,
+                                "details": details,
                             })
                         return {"cameras": result}
         except Exception:
@@ -444,11 +485,103 @@ async def set_email_notifications(cfg_payload: dict):
             except (TypeError, ValueError):
                 email_cfg[key] = 587
         elif key in {"enabled", "use_tls"}:
-            email_cfg[key] = as_bool(value, default=False)
+            email_cfg[key] = bool(value)
         else:
             email_cfg[key] = value
     save_config(cfg)
     return {"success": True}
+
+
+async def _home_assistant_states():
+    cfg = load_config()
+    ha = cfg.get("home_assistant", {})
+    url = ha.get("url")
+    token = ha.get("token")
+    if not url or not token:
+        raise HTTPException(status_code=400, detail="Home Assistant not configured")
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    async with aiohttp.ClientSession(headers=headers) as session:
+        async with session.get(f"{url}/api/states", timeout=10) as resp:
+            if resp.status != 200:
+                raise HTTPException(status_code=resp.status, detail="Unable to fetch Home Assistant state data")
+            return await resp.json()
+
+
+@app.get("/api/home_assistant/network")
+async def home_assistant_network():
+    states = await _home_assistant_states()
+
+    def label(state_obj):
+        attrs = state_obj.get("attributes") or {}
+        return (attrs.get("friendly_name") or state_obj.get("entity_id") or "Unknown").strip()
+
+    zigbee = []
+    bluetooth = []
+    network_devices = []
+    device_tracker = []
+
+    for state in states:
+        entity_id = (state.get("entity_id") or "").lower()
+        friendly = label(state)
+        cleaned = {
+            "entity_id": state.get("entity_id"),
+            "state": state.get("state"),
+            "friendly_name": friendly,
+            "attributes": state.get("attributes") or {},
+        }
+
+        if "zigbee" in entity_id or "zha" in entity_id or "mqtt" in entity_id and "network" in entity_id:
+            zigbee.append(cleaned)
+        if "bluetooth" in entity_id or "bt" in entity_id or "mesh" in entity_id:
+            bluetooth.append(cleaned)
+        if entity_id.startswith("device_tracker.") or "network" in entity_id or "wifi" in entity_id or "lan" in entity_id:
+            device_tracker.append(cleaned)
+
+        if entity_id.startswith("device_tracker."):
+            network_devices.append({
+                "entity_id": state.get("entity_id"),
+                "friendly_name": friendly,
+                "state": state.get("state"),
+                "source_type": (state.get("attributes") or {}).get("source_type", "unknown"),
+                "last_seen": (state.get("attributes") or {}).get("last_seen") or (state.get("attributes") or {}).get("last_updated") or None,
+            })
+
+    def status_from_value(value):
+        if value is None:
+            return "unknown"
+        v = str(value).lower()
+        if v in {"on", "home", "connected", "online", "active", "ok", "ready"}:
+            return "online"
+        if v in {"off", "away", "disconnected", "offline", "not_home", "unavailable", "unknown", "error"}:
+            return "offline"
+        return "unknown"
+
+    zigbee_summary = {
+        "status": status_from_value((zigbee[0].get("state") if zigbee else "unknown")),
+        "count": len(zigbee),
+        "items": zigbee[:10],
+    }
+    bluetooth_summary = {
+        "status": status_from_value((bluetooth[0].get("state") if bluetooth else "unknown")),
+        "count": len(bluetooth),
+        "items": bluetooth[:10],
+    }
+    connected_devices = [d for d in network_devices if str(d.get("state") or "").lower() in {"home", "connected", "on", "online", "active", "ready"}]
+    disconnected_devices = [d for d in network_devices if str(d.get("state") or "").lower() not in {"home", "connected", "on", "online", "active", "ready"}]
+
+    return {
+        "zigbee": zigbee_summary,
+        "bluetooth": bluetooth_summary,
+        "network": {
+            "total": len(network_devices),
+            "connected": len(connected_devices),
+            "disconnected": len(disconnected_devices),
+            "devices": network_devices[:25],
+            "connected_devices": connected_devices[:10],
+            "disconnected_devices": disconnected_devices[:10],
+        },
+        "device_tracker": device_tracker[:25],
+    }
 
 
 @app.get("/api/home_assistant/check")

@@ -20,7 +20,7 @@ Quick install (on your Ubuntu server)
 curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/install.sh | bash
 ```
 
-2. The installer will clone the repo, install dependencies, build the Docker images, and start the app.
+2. The installer will clone the repo, install dependencies, build the Docker images, start the app, and enable automatic startup via systemd if your server supports it.
 
 3. The frontend will be available at http://<your-server-ip>:6969 and the backend at http://<your-server-ip>:6868
 
@@ -33,8 +33,9 @@ Customize
 
 Local network access note
 - The monitor checks URLs from the machine running the app, not from your browser.
-- If your services are on the same LAN, run the stack on the same network as those devices, or use a host that can reach the LAN.
-- This is why the Docker bridge network can reach the internet but still fail against devices on your LAN.
+- If your services are on the same LAN, the app must run on the same LAN or a routed network that can reach them.
+- The Docker Compose file uses host networking so local LAN devices are reachable the same way public URLs are, without the Docker bridge isolation problem.
+- If you run the app in a VM or container on a different network segment, local devices will still not be reachable from there.
 
 Security
 - This is intended for use on your home network. If you expose it to the internet, secure it behind a reverse proxy with authentication (e.g., Nginx + OAuth, or use a VPN).
