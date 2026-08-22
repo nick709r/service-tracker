@@ -1,5 +1,6 @@
 const apiBase = '/api';
 let currentUser = null;
+const APP_NAME = 'LennyCat Service Monitor';
 
 const SERVICE_LOGOS = {
   sonarr: 'https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/sonarr.svg',
@@ -130,6 +131,7 @@ async function loadServices(){
   for(const s of list){
     const card = document.createElement('div');
     const isAgentDvr = s.id === 'agentdvr' || s.type === 'agentdvr';
+    const hasUrl = Boolean((s.url || '').trim());
     card.className = 'bg-gray-50 p-3 rounded shadow';
     card.innerHTML = `
       <div class="flex items-start gap-3">
@@ -138,16 +140,16 @@ async function loadServices(){
           <div class="flex justify-between items-start gap-2">
             <div class="min-w-0">
               <div class="font-semibold break-words">${s.name}</div>
-              <div class="text-sm text-gray-600 break-all">${s.url || ''}</div>
+              <div class="text-sm text-gray-600 break-all">${s.url || 'No URL configured yet'}</div>
             </div>
             <div class="text-right shrink-0">
-              <button class="status-btn bg-blue-500 text-white px-2 py-1 rounded" data-id="${s.id}">Check</button>
+              <button class="status-btn bg-blue-500 text-white px-2 py-1 rounded" data-id="${s.id}" ${hasUrl ? '' : 'disabled title="Add a URL first"'}>Check</button>
               <button class="edit-btn bg-yellow-400 text-white px-2 py-1 rounded ml-2" data-id="${s.id}">Edit</button>
             </div>
           </div>
         </div>
       </div>
-      <div class="mt-2 text-sm" id="status-${s.id}"></div>
+      <div class="mt-2 text-sm" id="status-${s.id}">${hasUrl ? '' : 'Add a URL to begin monitoring.'}</div>
       ${isAgentDvr ? '<div id="agentdvr-cameras" class="mt-3 space-y-2"></div>' : ''}
     `;
     container.appendChild(card);
@@ -156,6 +158,11 @@ async function loadServices(){
   document.querySelectorAll('.status-btn').forEach(b => b.addEventListener('click', async (e)=>{
     const id = e.target.dataset.id;
     const st = document.getElementById('status-' + id);
+    const service = list.find(item => item.id === id);
+    if(!service || !(service.url || '').trim()){
+      st.innerText = 'Add a URL to begin monitoring.';
+      return;
+    }
     st.innerText = 'Checking...';
     try{
       const r = await api(`/services/${id}/status`);

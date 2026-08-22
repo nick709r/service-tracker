@@ -74,14 +74,37 @@ def load_services():
     ensure_data_dir()
     if not SERVICES_FILE.exists():
         default_services = [
-            {"id": "sonarr", "name": "Sonarr", "type": "sonarr", "url": "http://sonarr:8989", "api_key": ""},
-            {"id": "lidarr", "name": "Lidarr", "type": "lidarr", "url": "http://lidarr:8686", "api_key": ""},
-            {"id": "transmission", "name": "Transmission", "type": "transmission", "url": "http://transmission:9091", "api_key": ""},
-            {"id": "homeassistant", "name": "Home Assistant", "type": "homeassistant", "url": "http://homeassistant:8123", "api_key": ""},
-            {"id": "agentdvr", "name": "Agent DVR", "type": "agentdvr", "url": "http://agentdvr:8090", "api_key": ""}
+            {"id": "sonarr", "name": "Sonarr", "type": "sonarr", "url": "", "api_key": ""},
+            {"id": "lidarr", "name": "Lidarr", "type": "lidarr", "url": "", "api_key": ""},
+            {"id": "transmission", "name": "Transmission", "type": "transmission", "url": "", "api_key": ""},
+            {"id": "homeassistant", "name": "Home Assistant", "type": "homeassistant", "url": "", "api_key": ""},
+            {"id": "agentdvr", "name": "Agent DVR", "type": "agentdvr", "url": "", "api_key": ""}
         ]
         SERVICES_FILE.write_text(json.dumps(default_services, indent=2))
-    return json.loads(SERVICES_FILE.read_text())
+        return default_services
+
+    services = json.loads(SERVICES_FILE.read_text())
+    legacy_urls = {
+        "http://sonarr:8989",
+        "http://lidarr:8686",
+        "http://transmission:9091",
+        "http://homeassistant:8123",
+        "http://agentdvr:8090",
+        "http://localhost:8989",
+        "http://localhost:8686",
+        "http://localhost:9091",
+        "http://localhost:8123",
+        "http://localhost:8090",
+    }
+    changed = False
+    for service in services:
+        url = (service.get("url") or "").strip()
+        if url in legacy_urls:
+            service["url"] = ""
+            changed = True
+    if changed:
+        save_services(services)
+    return services
 
 
 def save_services(svcs):
