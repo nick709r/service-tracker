@@ -1,4 +1,4 @@
 fastapi
 uvicorn[standard]
 aiohttp
-bcrypt==4.1.2
+passlib[bcrypt]
