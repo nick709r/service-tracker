@@ -20,7 +20,11 @@ Quick install (on your Ubuntu server)
 curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/install.sh | bash
 ```
 
-2. The frontend will be available at http://<your-server-ip>:6969 and the backend at http://<your-server-ip>:6868
+2. The installer will clone the repo, install dependencies, build the Docker images, and start the app.
+
+3. The frontend will be available at http://<your-server-ip>:6969 and the backend at http://<your-server-ip>:6868
+
+4. Default login: admin / admin
 
 Customize
 - Configure services and Home Assistant integration from the web UI after logging in.
