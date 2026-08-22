@@ -1,4 +1,4 @@
-const apiBase = '/api';
+const apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://127.0.0.1:6868/api' : '/api';
 let currentUser = null;
 const APP_NAME = 'LennyCat Service Monitor';
 
@@ -166,12 +166,18 @@ async function loadServices(){
     st.innerText = 'Checking...';
     try{
       const r = await api(`/services/${id}/status`);
-      st.innerText = JSON.stringify(r);
+      let statusText = r.status === 'reachable'
+        ? `Reachable (${r.code})`
+        : (r.status === 'no_url' ? 'No URL configured' : `${r.status} (${r.code || 'n/a'})`);
+      if(r.status === 'unreachable' && r.error){
+        statusText += ` — ${r.error}`;
+      }
+      st.innerText = `${statusText}${r.final_url ? ` → ${r.final_url}` : ''}`;
       if(id === 'agentdvr' || id === 'agent-dvr') {
         await loadAgentDvrCameras();
       }
     }catch(err){
-      st.innerText = 'Error';
+      st.innerText = `Error — ${err.message || 'request failed'}`;
     }
   }));
 

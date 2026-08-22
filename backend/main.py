@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from pathlib import Path
@@ -7,7 +8,22 @@ import aiohttp
 import bcrypt
 from fastapi.middleware.cors import CORSMiddleware
 
-DATA_DIR = Path("/app/data")
+DEFAULT_DATA_DIR = Path("/app/data")
+LOCAL_DATA_DIR = Path(__file__).resolve().parent / "data"
+
+def resolve_data_dir():
+    preferred = os.environ.get("SERVICE_TRACKER_DATA_DIR")
+    if preferred:
+        return Path(preferred)
+    for candidate in (DEFAULT_DATA_DIR, LOCAL_DATA_DIR):
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            return candidate
+        except PermissionError:
+            continue
+    return LOCAL_DATA_DIR
+
+DATA_DIR = resolve_data_dir()
 CONFIG_FILE = DATA_DIR / "config.json"
 SERVICES_FILE = DATA_DIR / "services.json"
 
@@ -70,6 +86,10 @@ def coerce_service_url(url: str | None):
     return value
 
 
+def coerce_status_url(url: str | None):
+    return coerce_service_url(url)
+
+
 def load_services():
     ensure_data_dir()
     if not SERVICES_FILE.exists():
@@ -84,6 +104,9 @@ def load_services():
         return default_services
 
     services = json.loads(SERVICES_FILE.read_text())
+    if not isinstance(services, list):
+        services = []
+
     legacy_urls = {
         "http://sonarr:8989",
         "http://lidarr:8686",
@@ -95,16 +118,41 @@ def load_services():
         "http://localhost:9091",
         "http://localhost:8123",
         "http://localhost:8090",
+        "http://127.0.0.1:8989",
+        "http://127.0.0.1:8686",
+        "http://127.0.0.1:9091",
+        "http://127.0.0.1:8123",
+        "http://127.0.0.1:8090",
     }
+    cleaned = []
+    seen_ids = set()
+    seen_pairs = set()
     changed = False
     for service in services:
-        url = (service.get("url") or "").strip()
-        if url in legacy_urls:
-            service["url"] = ""
+        if not isinstance(service, dict):
             changed = True
+            continue
+        svc = {**service}
+        svc["id"] = str(svc.get("id") or svc.get("name") or "").strip().lower().replace(" ", "_")
+        if not svc["id"]:
+            svc["id"] = f"service_{len(cleaned)}"
+        url = (svc.get("url") or "").strip()
+        if url in legacy_urls:
+            svc["url"] = ""
+            changed = True
+        if not svc.get("name"):
+            svc["name"] = svc["id"].replace("_", " ").title()
+            changed = True
+        pair = (svc.get("id"), (svc.get("url") or "").strip(), (svc.get("name") or "").strip())
+        if svc.get("id") in seen_ids or pair in seen_pairs:
+            changed = True
+            continue
+        seen_ids.add(svc["id"])
+        seen_pairs.add(pair)
+        cleaned.append(svc)
     if changed:
-        save_services(services)
-    return services
+        save_services(cleaned)
+    return cleaned
 
 
 def save_services(svcs):
@@ -232,13 +280,18 @@ async def service_status(svc_id: str):
     svcs = load_services()
     for s in svcs:
         if s.get("id") == svc_id:
-            url = coerce_service_url(s.get("url"))
+            url = coerce_status_url(s.get("url"))
             if not url:
                 return {"status": "no_url"}
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(url, timeout=5) as resp:
-                        return {"status": "ok" if resp.status < 400 else "error", "code": resp.status}
+                    async with session.get(url, timeout=10, allow_redirects=True) as resp:
+                        return {
+                            "status": "reachable" if resp.status < 600 else "error",
+                            "code": resp.status,
+                            "final_url": str(resp.url),
+                            "reason": "reachable HTTP endpoint" if resp.status < 600 else "server responded with an error",
+                        }
             except Exception as e:
                 return {"status": "unreachable", "error": str(e)}
     raise HTTPException(status_code=404, detail="Service not found")

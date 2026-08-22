@@ -25,5 +25,10 @@ curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/install
 Customize
 - Configure services and Home Assistant integration from the web UI after logging in.
 
+Local network access note
+- The monitor checks URLs from the machine running the app, not from your browser.
+- If your services are on the same LAN, run the stack with host networking so the backend can reach those private IPs and local hostnames.
+- This is why the Docker bridge network can reach the internet but still fail against devices on your LAN.
+
 Security
 - This is intended for use on your home network. If you expose it to the internet, secure it behind a reverse proxy with authentication (e.g., Nginx + OAuth, or use a VPN).
