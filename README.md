@@ -24,7 +24,7 @@ curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/install
 
 2. The installer will clone the repo to /opt/lennycat-service-monitor, create a Python virtual environment, install dependencies, and register a systemd service so it starts automatically on boot.
 
-3. The frontend will be available at http://<your-server-ip>:6969 and the backend at http://<your-server-ip>:6868
+3. The frontend will be available at http://<your-server-ip>:6969 and the backend at http://<your-server-ip>:6862
 
 4. Default login: admin / admin
 

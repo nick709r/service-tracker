@@ -1,4 +1,4 @@
-const apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://127.0.0.1:6868/api' : '/api';
+const apiBase = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://127.0.0.1:6862/api' : '/api';
 let currentUser = null;
 const APP_NAME = 'LennyCat Service Monitor';
 

@@ -18,7 +18,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-for port in 6868 6969; do
+for port in 6862 6969; do
   python3 - "$port" <<'PY'
 import socket, sys
 port = int(sys.argv[1])
@@ -60,7 +60,7 @@ LOG_DIR="\$APP_DIR/logs"
 mkdir -p "\$DATA_DIR" "\$LOG_DIR"
 export SERVICE_TRACKER_DATA_DIR="\$DATA_DIR"
 
-nohup "\$APP_DIR/venv/bin/python3" -m uvicorn main:app --host 0.0.0.0 --port 6868 --app-dir "\$APP_DIR/backend" >"\$LOG_DIR/backend.log" 2>&1 &
+nohup "\$APP_DIR/venv/bin/python3" -m uvicorn main:app --host 0.0.0.0 --port 6862 --app-dir "\$APP_DIR/backend" >"\$LOG_DIR/backend.log" 2>&1 &
 sleep 2
 nohup "\$APP_DIR/venv/bin/python3" -m http.server 6969 --bind 0.0.0.0 --directory "\$APP_DIR/frontend" >"\$LOG_DIR/frontend.log" 2>&1 &
 sleep 1
@@ -71,7 +71,7 @@ cat > "$STOP_SCRIPT" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 for pid in \
-    \\$(pgrep -f "uvicorn.*6868.*main:app" || true) \
+    \\$(pgrep -f "uvicorn.*6862.*main:app" || true) \
     \\$(pgrep -f "http.server 6969.*frontend" || true); do
   if [ -n "\$pid" ]; then
     kill "\$pid" || true
@@ -107,7 +107,7 @@ fi
 echo ""
 echo "Installation complete."
 echo "Frontend: http://<server-ip>:6969"
-echo "Backend:  http://<server-ip>:6868"
+echo "Backend:  http://<server-ip>:6862"
 echo "Login: admin / admin"
 echo ""
 echo "Useful commands:"
