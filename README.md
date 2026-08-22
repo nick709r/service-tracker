@@ -14,15 +14,25 @@ Defaults
 
 Quick install (on your Ubuntu server)
 
-1. Make the install script executable and run it:
+1. Run the installer:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/install.sh | bash
 ```
 
-2. The installer will clone the repo, install dependencies, build the Docker images, start the app, and enable automatic startup via systemd if your server supports it.
+2. The installer will clone the repo to /opt/lennycat-service-monitor, create a Python virtual environment, install dependencies, and register a systemd service so it starts automatically on boot.
 
 3. The frontend will be available at http://<your-server-ip>:6969 and the backend at http://<your-server-ip>:6868
+
+4. Default login: admin / admin
+
+Uninstall
+
+```bash
+curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/uninstall.sh | bash
+```
+
+This removes the service, the installed app files, and the systemd registration.
 
 4. Default login: admin / admin
 
