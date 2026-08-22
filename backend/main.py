@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 import asyncio
 import aiohttp
-from passlib.hash import bcrypt
+import bcrypt
 from fastapi.middleware.cors import CORSMiddleware
 
 DATA_DIR = Path("/app/data")
@@ -45,10 +45,9 @@ def ensure_data_dir():
 def load_config():
     ensure_data_dir()
     if not CONFIG_FILE.exists():
-        # create default admin/admin
         default = {
             "admin_user": "admin",
-            "admin_password_hash": bcrypt.hash("admin"),
+            "admin_password_hash": bcrypt.hashpw(b"admin", bcrypt.gensalt()).decode(),
             "home_assistant": {}
         }
         CONFIG_FILE.write_text(json.dumps(default, indent=2))
@@ -88,7 +87,8 @@ async def startup_event():
 @app.post("/api/login")
 async def login(payload: LoginRequest):
     cfg = load_config()
-    if payload.username == cfg.get("admin_user") and bcrypt.verify(payload.password, cfg.get("admin_password_hash")):
+    stored_hash = cfg.get("admin_password_hash")
+    if payload.username == cfg.get("admin_user") and stored_hash and bcrypt.checkpw(payload.password.encode(), stored_hash.encode()):
         return {"success": True, "username": payload.username}
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -98,9 +98,9 @@ async def change_password(payload: ChangePasswordRequest):
     cfg = load_config()
     if payload.username != cfg.get("admin_user"):
         raise HTTPException(status_code=403, detail="Invalid user")
-    if not bcrypt.verify(payload.current_password, cfg.get("admin_password_hash")):
+    if not bcrypt.checkpw(payload.current_password.encode(), cfg.get("admin_password_hash").encode()):
         raise HTTPException(status_code=403, detail="Current password incorrect")
-    cfg["admin_password_hash"] = bcrypt.hash(payload.new_password)
+    cfg["admin_password_hash"] = bcrypt.hashpw(payload.new_password.encode(), bcrypt.gensalt()).decode()
     save_config(cfg)
     return {"success": True}
 
