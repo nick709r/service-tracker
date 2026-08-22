@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Service Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 min-h-screen">
+    <div class="max-w-4xl mx-auto p-4">
+      <header class="flex items-center justify-between mb-4">
+        <h1 class="text-2xl font-semibold">Service Tracker</h1>
+        <div id="user-area"></div>
+      </header>
+
+      <div id="login" class="max-w-md mx-auto bg-white p-4 rounded shadow">
+        <h2 class="font-semibold mb-2">Admin Login</h2>
+        <label class="block mb-2">Username
+          <input id="username" class="w-full border rounded p-2" value="admin" />
+        </label>
+        <label class="block mb-2">Password
+          <input id="password" type="password" class="w-full border rounded p-2" value="admin" />
+        </label>
+        <button id="login-btn" class="bg-blue-600 text-white px-4 py-2 rounded">Login</button>
+      </div>
+
+      <div id="app" class="hidden">
+        <section class="bg-white p-4 rounded shadow mb-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-semibold">Services</h2>
+            <button id="add-service-btn" class="bg-green-600 text-white px-3 py-1 rounded">Add</button>
+          </div>
+          <div id="services-list" class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+        </section>
+
+        <section class="bg-white p-4 rounded shadow">
+          <h2 class="font-semibold mb-2">Home Assistant</h2>
+          <label class="block mb-2">URL
+            <input id="ha-url" class="w-full border rounded p-2" placeholder="http://homeassistant:8123" />
+          </label>
+          <label class="block mb-2">Long-Lived Token
+            <input id="ha-token" class="w-full border rounded p-2" placeholder="Bearer token" />
+          </label>
+          <div class="flex gap-2">
+            <button id="ha-save" class="bg-blue-600 text-white px-4 py-2 rounded">Save</button>
+            <button id="ha-check" class="bg-gray-600 text-white px-4 py-2 rounded">Check</button>
+          </div>
+          <div id="ha-status" class="mt-2 text-sm text-gray-700"></div>
+        </section>
+      </div>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
