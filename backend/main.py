@@ -141,6 +141,57 @@ async def delete_service(svc_id: str):
     return {"success": True}
 
 
+async def _agent_dvr_camera_data(base_url: str, api_key: str | None = None):
+    candidates = [
+        f"{base_url.rstrip('/')}/api/cameras",
+        f"{base_url.rstrip('/')}/api/cameras/",
+        f"{base_url.rstrip('/')}/api/v1/cameras",
+        f"{base_url.rstrip('/')}/api/JSON?request=GetCameras",
+    ]
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+        headers["X-API-Key"] = api_key
+    for candidate in candidates:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(candidate, headers=headers, timeout=5) as resp:
+                    if resp.status != 200:
+                        continue
+                    payload = await resp.json(content_type=None)
+                    items = payload
+                    if isinstance(payload, dict):
+                        for key in ["cameras", "items", "data", "cameraList", "results"]:
+                            if isinstance(payload.get(key), list):
+                                items = payload[key]
+                                break
+                    if isinstance(items, list):
+                        result = []
+                        for camera in items:
+                            if not isinstance(camera, dict):
+                                continue
+                            camera_id = str(camera.get("id") or camera.get("cameraId") or camera.get("deviceId") or camera.get("ID") or "").strip()
+                            name = camera.get("name") or camera.get("cameraName") or camera.get("label") or f"Camera {camera_id or len(result)+1}"
+                            status = camera.get("status") or camera.get("state") or camera.get("recordingState") or ("online" if camera.get("isOnline") or camera.get("isConnected") else "offline")
+                            snapshot = camera.get("snapshotUrl") or camera.get("snapshot_url") or camera.get("snapshot") or camera.get("image") or camera.get("thumbnail")
+                            if snapshot and not snapshot.startswith("http"):
+                                snapshot = f"{base_url.rstrip('/')}/{snapshot.lstrip('/')}"
+                            if camera_id and not snapshot:
+                                snapshot = f"{base_url.rstrip('/')}/api/cameras/{camera_id}/snapshot"
+                            result.append({
+                                "id": camera_id,
+                                "name": name,
+                                "status": str(status).lower(),
+                                "online": bool(camera.get("isOnline") or camera.get("isConnected") or str(status).lower() in {"online", "connected", "recording"}),
+                                "recording": bool(camera.get("isRecording") or camera.get("recording") or str(status).lower() in {"recording"}),
+                                "snapshot_url": snapshot,
+                            })
+                        return {"cameras": result}
+        except Exception:
+            continue
+    return {"cameras": []}
+
+
 @app.get("/api/services/{svc_id}/status")
 async def service_status(svc_id: str):
     svcs = load_services()
@@ -155,6 +206,21 @@ async def service_status(svc_id: str):
                         return {"status": "ok" if resp.status < 400 else "error", "code": resp.status}
             except Exception as e:
                 return {"status": "unreachable", "error": str(e)}
+    raise HTTPException(status_code=404, detail="Service not found")
+
+
+@app.get("/api/services/{svc_id}/cameras")
+async def service_cameras(svc_id: str):
+    svcs = load_services()
+    for s in svcs:
+        if s.get("id") == svc_id:
+            if s.get("type") != "agentdvr":
+                return {"cameras": []}
+            url = s.get("url")
+            if not url:
+                return {"cameras": []}
+            api_key = s.get("api_key")
+            return await _agent_dvr_camera_data(url, api_key)
     raise HTTPException(status_code=404, detail="Service not found")
 
 
