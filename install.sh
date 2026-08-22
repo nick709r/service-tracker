@@ -18,6 +18,18 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
+if command -v systemctl >/dev/null 2>&1 && [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
+  echo "Stopping any existing LennyCat service before continuing..."
+  systemctl disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
+  rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+  systemctl daemon-reload >/dev/null 2>&1 || true
+fi
+
+for pid in $(pgrep -f "uvicorn.*6868.*main:app" || true); do
+  echo "Stopping stale LennyCat backend on port 6868 (PID $pid)..."
+  kill "$pid" || true
+done
+
 for port in 6862 6969; do
   python3 - "$port" <<'PY'
 import socket, sys
