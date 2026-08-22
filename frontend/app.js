@@ -36,7 +36,8 @@ async function login(){
     document.getElementById('login').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     document.getElementById('user-area').innerText = `Logged in as ${currentUser}`;
-    loadServices();
+    await loadServices();
+    await loadEmailSettings();
   }catch(e){
     alert('Login failed');
   }
@@ -198,6 +199,47 @@ async function addService(){
   openServiceDialog();
 }
 
+async function loadEmailSettings(){
+  try {
+    const settings = await api('/email_notifications');
+    const fields = {
+      enabled: document.getElementById('email-enabled'),
+      smtp_host: document.getElementById('email-smtp-host'),
+      smtp_port: document.getElementById('email-smtp-port'),
+      smtp_username: document.getElementById('email-username'),
+      smtp_password: document.getElementById('email-password'),
+      from_email: document.getElementById('email-from'),
+      to_email: document.getElementById('email-to'),
+      use_tls: document.getElementById('email-use-tls')
+    };
+    if (fields.enabled) fields.enabled.checked = !!settings.enabled;
+    if (fields.smtp_host) fields.smtp_host.value = settings.smtp_host || '';
+    if (fields.smtp_port) fields.smtp_port.value = settings.smtp_port || 587;
+    if (fields.smtp_username) fields.smtp_username.value = settings.smtp_username || '';
+    if (fields.smtp_password) fields.smtp_password.value = settings.smtp_password || '';
+    if (fields.from_email) fields.from_email.value = settings.from_email || '';
+    if (fields.to_email) fields.to_email.value = settings.to_email || '';
+    if (fields.use_tls) fields.use_tls.checked = settings.use_tls !== false;
+  } catch (e) {
+    document.getElementById('email-status').innerText = 'Email settings not available yet';
+  }
+}
+
+async function saveEmailSettings(){
+  const payload = {
+    enabled: document.getElementById('email-enabled').checked,
+    smtp_host: document.getElementById('email-smtp-host').value.trim(),
+    smtp_port: Number(document.getElementById('email-smtp-port').value || 587),
+    smtp_username: document.getElementById('email-username').value.trim(),
+    smtp_password: document.getElementById('email-password').value,
+    from_email: document.getElementById('email-from').value.trim(),
+    to_email: document.getElementById('email-to').value.trim(),
+    use_tls: document.getElementById('email-use-tls').checked
+  };
+  await api('/email_notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  document.getElementById('email-status').innerText = 'Email alerts saved.';
+}
+
 async function saveHA(){
   const url = document.getElementById('ha-url').value;
   const token = document.getElementById('ha-token').value;
@@ -259,6 +301,7 @@ function setupUI(){
   document.getElementById('add-service-btn').addEventListener('click', addService);
   document.getElementById('ha-save').addEventListener('click', saveHA);
   document.getElementById('ha-check').addEventListener('click', checkHA);
+  document.getElementById('email-save').addEventListener('click', saveEmailSettings);
 }
 
 if (document.readyState === 'loading') {

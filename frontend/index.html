@@ -51,6 +51,38 @@
           </div>
           <div id="ha-status" class="mt-2 text-sm text-gray-700"></div>
         </section>
+
+        <section class="bg-white p-4 rounded shadow mt-4">
+          <h2 class="font-semibold mb-2">Email Alerts</h2>
+          <label class="block mb-2">Enabled
+            <input id="email-enabled" type="checkbox" class="ml-2" />
+          </label>
+          <label class="block mb-2">SMTP Host
+            <input id="email-smtp-host" class="w-full border rounded p-2" placeholder="smtp.gmail.com" />
+          </label>
+          <label class="block mb-2">SMTP Port
+            <input id="email-smtp-port" class="w-full border rounded p-2" type="number" value="587" />
+          </label>
+          <label class="block mb-2">Username
+            <input id="email-username" class="w-full border rounded p-2" placeholder="you@example.com" />
+          </label>
+          <label class="block mb-2">Password
+            <input id="email-password" type="password" class="w-full border rounded p-2" placeholder="App password" />
+          </label>
+          <label class="block mb-2">From Email
+            <input id="email-from" class="w-full border rounded p-2" placeholder="you@example.com" />
+          </label>
+          <label class="block mb-2">To Email
+            <input id="email-to" class="w-full border rounded p-2" placeholder="alerts@example.com" />
+          </label>
+          <label class="block mb-2">Use TLS
+            <input id="email-use-tls" type="checkbox" class="ml-2" checked />
+          </label>
+          <div class="flex gap-2">
+            <button id="email-save" class="bg-blue-600 text-white px-4 py-2 rounded">Save alerts</button>
+          </div>
+          <div id="email-status" class="mt-2 text-sm text-gray-700"></div>
+        </section>
       </div>
     </div>
 

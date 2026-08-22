@@ -27,11 +27,13 @@ curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/install
 4. Default login: admin / admin
 
 Customize
-- Configure services and Home Assistant integration from the web UI after logging in.
+- Configure services, Home Assistant, and email alerting from the web UI after logging in.
+- Email alerts are checked every 30 seconds and only fire when a service changes state.
+- Example SMTP settings can also be supplied through environment variables or the alert settings form.
 
 Local network access note
 - The monitor checks URLs from the machine running the app, not from your browser.
-- If your services are on the same LAN, run the stack with host networking so the backend can reach those private IPs and local hostnames.
+- If your services are on the same LAN, run the stack on the same network as those devices, or use a host that can reach the LAN.
 - This is why the Docker bridge network can reach the internet but still fail against devices on your LAN.
 
 Security
