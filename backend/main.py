@@ -59,6 +59,17 @@ def save_config(cfg: dict):
     CONFIG_FILE.write_text(json.dumps(cfg, indent=2))
 
 
+def coerce_service_url(url: str | None):
+    if not url:
+        return url
+    value = url.strip()
+    if not value:
+        return value
+    if '://' not in value:
+        value = f"http://{value}"
+    return value
+
+
 def load_services():
     ensure_data_dir()
     if not SERVICES_FILE.exists():
@@ -114,7 +125,8 @@ async def get_services():
 async def add_service(item: ServiceItem):
     svcs = load_services()
     new_id = item.id or item.name.lower().replace(" ", "_")
-    svc = {"id": new_id, "name": item.name, "type": item.type, "url": item.url, "api_key": item.api_key}
+    url = coerce_service_url(item.url)
+    svc = {"id": new_id, "name": item.name, "type": item.type, "url": url, "api_key": item.api_key}
     svcs.append(svc)
     save_services(svcs)
     return svc
@@ -125,7 +137,7 @@ async def update_service(svc_id: str, item: ServiceItem):
     svcs = load_services()
     for s in svcs:
         if s.get("id") == svc_id:
-            s.update({"name": item.name, "type": item.type, "url": item.url, "api_key": item.api_key})
+            s.update({"name": item.name, "type": item.type, "url": coerce_service_url(item.url), "api_key": item.api_key})
             save_services(svcs)
             return s
     raise HTTPException(status_code=404, detail="Service not found")
@@ -197,7 +209,7 @@ async def service_status(svc_id: str):
     svcs = load_services()
     for s in svcs:
         if s.get("id") == svc_id:
-            url = s.get("url")
+            url = coerce_service_url(s.get("url"))
             if not url:
                 return {"status": "no_url"}
             try:
