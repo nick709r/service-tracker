@@ -39,6 +39,7 @@ async function login(){
     await loadServices();
     await loadEmailSettings();
     await loadHomeAssistantNetworkStatus();
+    await loadNetworkSummary();
   }catch(e){
     alert('Login failed');
   }
@@ -145,6 +146,126 @@ async function loadAgentDvrCameras(){
   }
 }
 
+async function renderServiceDetails(service){
+  const detailsEl = document.getElementById(`details-${service.id}`);
+  if(!detailsEl) return;
+  if(!(service.url || '').trim()) {
+    detailsEl.innerHTML = '';
+    return;
+  }
+
+  try {
+    const details = await api(`/services/${service.id}/details`);
+    const kind = (service.type || service.id || '').toLowerCase();
+    let html = '';
+
+    if(kind === 'sonarr' || kind === 'lidarr') {
+      const downloads = Array.isArray(details.downloads) ? details.downloads : [];
+      const upcoming = Array.isArray(details.upcoming) ? details.upcoming : [];
+      html = `
+        <div class="mt-3 space-y-2 text-xs text-gray-700">
+          <div class="grid grid-cols-2 gap-2">
+            <div class="border rounded p-2 bg-white"><span class="text-gray-500">Downloading:</span> <strong>${details.download_count || 0}</strong></div>
+            <div class="border rounded p-2 bg-white"><span class="text-gray-500">Queue:</span> <strong>${details.queue_total || 0}</strong></div>
+          </div>
+          <div class="border rounded p-2 bg-white">
+            <div class="font-semibold mb-1">Active queue</div>
+            ${downloads.length ? downloads.map(item => `<div class="truncate">${item.title || item.name || 'Item'} • ${item.status || 'Queued'}</div>`).join('') : '<div class="text-gray-500">No active downloads.</div>'}
+          </div>
+          <div class="border rounded p-2 bg-white">
+            <div class="font-semibold mb-1">Coming soon</div>
+            ${upcoming.length ? upcoming.map(item => `<div class="truncate">${item.title || item.seriesTitle || item.albumTitle || 'Upcoming'} • ${item.airDateUtc ? new Date(item.airDateUtc).toLocaleDateString() : 'Soon'}</div>`).join('') : '<div class="text-gray-500">No upcoming items.</div>'}
+          </div>
+        </div>
+      `;
+    } else if(kind === 'jellyfin') {
+      const playing = Array.isArray(details.playing) ? details.playing : [];
+      const counts = details.counts || {};
+      const server = details.server || {};
+      html = `
+        <div class="mt-3 space-y-2 text-xs text-gray-700">
+          <div class="grid grid-cols-3 gap-2">
+            <div class="border rounded p-2 bg-white"><span class="text-gray-500">Users:</span> <strong>${details.user_count || 0}</strong></div>
+            <div class="border rounded p-2 bg-white"><span class="text-gray-500">Sessions:</span> <strong>${(details.sessions || []).length}</strong></div>
+            <div class="border rounded p-2 bg-white"><span class="text-gray-500">Version:</span> <strong>${server.Version || 'n/a'}</strong></div>
+          </div>
+          <div class="border rounded p-2 bg-white">
+            <div class="font-semibold mb-1">Now watching</div>
+            ${playing.length ? playing.map(item => `<div class="truncate">${item.user || 'Unknown'} • ${item.title || 'Unknown item'}</div>`).join('') : '<div class="text-gray-500">No active sessions.</div>'}
+          </div>
+          <div class="border rounded p-2 bg-white">
+            <div class="font-semibold mb-1">Library counts</div>
+            <div class="flex flex-wrap gap-2">
+              ${Object.entries(counts).slice(0, 6).map(([k, v]) => `<span class="px-2 py-1 rounded bg-gray-100">${k}: ${v}</span>`).join('') || '<span class="text-gray-500">No library counts returned.</span>'}
+            </div>
+          </div>
+        </div>
+      `;
+    } else if(kind === 'crafty') {
+      const statusData = details.status_data || {};
+      const servers = details.servers || {};
+      html = `
+        <div class="mt-3 space-y-2 text-xs text-gray-700">
+          <div class="border rounded p-2 bg-white"><span class="text-gray-500">Status:</span> <strong>${statusData.status || 'unknown'}</strong></div>
+          <div class="border rounded p-2 bg-white"><span class="text-gray-500">Servers:</span> <strong>${(Array.isArray(servers) ? servers.length : Object.keys(servers || {}).length) || 0}</strong></div>
+        </div>
+      `;
+    } else if(kind === 'router' || kind === 'dlink' || /router|dlink/.test((service.name || '').toLowerCase())) {
+      const clients = Array.isArray(details.clients) ? details.clients : [];
+      html = `
+        <div class="mt-3 space-y-2 text-xs text-gray-700">
+          <div class="grid grid-cols-3 gap-2">
+            <div class="border rounded p-2 bg-white"><span class="text-gray-500">Down:</span> <strong>${details.download_mbps || 0} Mbps</strong></div>
+            <div class="border rounded p-2 bg-white"><span class="text-gray-500">Up:</span> <strong>${details.upload_mbps || 0} Mbps</strong></div>
+            <div class="border rounded p-2 bg-white"><span class="text-gray-500">Clients:</span> <strong>${details.client_count || 0}</strong></div>
+          </div>
+          <div class="border rounded p-2 bg-white">
+            <div class="font-semibold mb-1">Connected clients</div>
+            ${clients.length ? clients.slice(0,5).map(client => `<div class="truncate">${client.name || client.hostname || client.ip || client.mac || 'Client'} • ${client.ip || client.mac || client.state || 'online'}</div>`).join('') : '<div class="text-gray-500">No client data exposed by this router API.</div>'}
+          </div>
+        </div>
+      `;
+    }
+    detailsEl.innerHTML = html || '<div class="mt-3 text-xs text-gray-500">No extra monitoring data available for this service yet.</div>';
+  } catch (err) {
+    detailsEl.innerHTML = '<div class="mt-3 text-xs text-gray-500">Monitoring details unavailable.</div>';
+  }
+}
+
+async function updateServiceStatus(id, list){
+  const st = document.getElementById('status-' + id);
+  const service = list.find(item => item.id === id);
+  if(!service || !(service.url || '').trim()){
+    st.innerHTML = '<span class="inline-flex items-center gap-2 text-yellow-700"><span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span> Add a URL to begin monitoring.</span>';
+    return;
+  }
+  st.innerHTML = '<span class="inline-flex items-center gap-2 text-gray-600"><span class="w-2.5 h-2.5 rounded-full bg-gray-400 animate-pulse"></span> Checking...</span>';
+  try{
+    const r = await api(`/services/${id}/status`);
+    const isReachable = r.status === 'reachable';
+    const isNoUrl = r.status === 'no_url';
+    const statusLabel = isReachable ? 'Reachable' : (isNoUrl ? 'No URL configured' : r.status || 'Unknown');
+    const statusTone = isReachable ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200';
+    const statusDot = isReachable ? 'bg-green-500' : 'bg-red-500';
+    const detailText = r.status === 'unreachable' && r.error ? ` — ${r.error}` : '';
+    st.innerHTML = `
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="inline-flex items-center gap-2 px-2 py-1 rounded-full ${statusTone}">
+          <span class="w-2.5 h-2.5 rounded-full ${statusDot}"></span>
+          ${isReachable ? '✓' : '✕'} ${statusLabel}
+        </span>
+        <span class="text-xs text-gray-600">${r.code || 'n/a'}${detailText}${r.final_url ? ` → ${r.final_url}` : ''}</span>
+      </div>
+    `;
+    if(id === 'agentdvr' || id === 'agent-dvr') {
+      await loadAgentDvrCameras();
+    }
+    await renderServiceDetails(service);
+  }catch(err){
+    st.innerHTML = '<span class="inline-flex items-center gap-2 text-red-700"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> Error — ' + (err.message || 'request failed') + '</span>';
+  }
+}
+
 async function loadServices(){
   const list = await api('/services');
   const container = document.getElementById('services-list');
@@ -171,6 +292,7 @@ async function loadServices(){
         </div>
       </div>
       <div class="mt-2 text-sm" id="status-${s.id}">${hasUrl ? '' : 'Add a URL to begin monitoring.'}</div>
+      <div id="details-${s.id}"></div>
       ${isAgentDvr ? '<div id="agentdvr-cameras" class="mt-3 space-y-2"></div>' : ''}
     `;
     container.appendChild(card);
@@ -178,36 +300,7 @@ async function loadServices(){
 
   document.querySelectorAll('.status-btn').forEach(b => b.addEventListener('click', async (e)=>{
     const id = e.target.dataset.id;
-    const st = document.getElementById('status-' + id);
-    const service = list.find(item => item.id === id);
-    if(!service || !(service.url || '').trim()){
-      st.innerHTML = '<span class="inline-flex items-center gap-2 text-yellow-700"><span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span> Add a URL to begin monitoring.</span>';
-      return;
-    }
-    st.innerHTML = '<span class="inline-flex items-center gap-2 text-gray-600"><span class="w-2.5 h-2.5 rounded-full bg-gray-400 animate-pulse"></span> Checking...</span>';
-    try{
-      const r = await api(`/services/${id}/status`);
-      const isReachable = r.status === 'reachable';
-      const isNoUrl = r.status === 'no_url';
-      const statusLabel = isReachable ? 'Reachable' : (isNoUrl ? 'No URL configured' : r.status || 'Unknown');
-      const statusTone = isReachable ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200';
-      const statusDot = isReachable ? 'bg-green-500' : 'bg-red-500';
-      const detailText = r.status === 'unreachable' && r.error ? ` — ${r.error}` : '';
-      st.innerHTML = `
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="inline-flex items-center gap-2 px-2 py-1 rounded-full ${statusTone}">
-            <span class="w-2.5 h-2.5 rounded-full ${statusDot}"></span>
-            ${isReachable ? '✓' : '✕'} ${statusLabel}
-          </span>
-          <span class="text-xs text-gray-600">${r.code || 'n/a'}${detailText}${r.final_url ? ` → ${r.final_url}` : ''}</span>
-        </div>
-      `;
-      if(id === 'agentdvr' || id === 'agent-dvr') {
-        await loadAgentDvrCameras();
-      }
-    }catch(err){
-      st.innerHTML = '<span class="inline-flex items-center gap-2 text-red-700"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> Error — ' + (err.message || 'request failed') + '</span>';
-    }
+    await updateServiceStatus(id, list);
   }));
 
   document.querySelectorAll('.edit-btn').forEach(b => b.addEventListener('click', async (e)=>{
@@ -217,6 +310,12 @@ async function loadServices(){
       openServiceDialog(service);
     }
   }));
+
+  for (const service of list) {
+    if ((service.url || '').trim()) {
+      await updateServiceStatus(service.id, list);
+    }
+  }
 
   if(list.some(service => service.id === 'agentdvr' || service.type === 'agentdvr')) {
     await loadAgentDvrCameras();
@@ -355,6 +454,56 @@ async function loadHomeAssistantNetworkStatus(){
     summaryEl.innerHTML = '<div class="text-sm text-gray-500 mt-3">Home Assistant network summary unavailable yet.</div>';
     detailsEl.innerHTML = '';
     detailsEl.classList.add('hidden');
+  }
+}
+
+async function loadNetworkSummary(){
+  const el = document.getElementById('network-monitor-summary');
+  if (!el) return;
+
+  try {
+    const data = await api('/network/summary');
+    const chart = Array.isArray(data.chart) ? data.chart : [];
+    const clients = Array.isArray(data.clients) ? data.clients : [];
+    const max = Math.max(...chart.map(item => Number(item.value) || 0), 1);
+
+    el.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="border rounded p-3 bg-gray-50">
+          <div class="text-xs uppercase tracking-wide text-gray-500">Download</div>
+          <div class="mt-2 text-xl font-semibold text-blue-700">${Number(data.download_mbps || 0).toFixed(1)} Mbps</div>
+        </div>
+        <div class="border rounded p-3 bg-gray-50">
+          <div class="text-xs uppercase tracking-wide text-gray-500">Upload</div>
+          <div class="mt-2 text-xl font-semibold text-emerald-700">${Number(data.upload_mbps || 0).toFixed(1)} Mbps</div>
+        </div>
+        <div class="border rounded p-3 bg-gray-50">
+          <div class="text-xs uppercase tracking-wide text-gray-500">Clients</div>
+          <div class="mt-2 text-xl font-semibold text-violet-700">${data.client_count || 0}</div>
+        </div>
+      </div>
+      <div class="mt-4">
+        <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Traffic</div>
+        <div class="space-y-2">
+          ${chart.map(item => `
+            <div>
+              <div class="flex justify-between text-xs text-gray-600 mb-1"><span>${item.label}</span><span>${Number(item.value || 0).toFixed(1)} Mbps</span></div>
+              <div class="h-2 bg-gray-200 rounded overflow-hidden">
+                <div class="h-full rounded bg-gradient-to-r from-blue-500 to-emerald-500" style="width: ${(Number(item.value || 0) / max) * 100}%"></div>
+              </div>
+            </div>
+          `).join('') || '<div class="text-sm text-gray-500">No router traffic data available yet.</div>'}
+        </div>
+      </div>
+      <div class="mt-4">
+        <div class="text-xs uppercase tracking-wide text-gray-500 mb-2">Connected clients</div>
+        <div class="space-y-2">
+          ${clients.length ? clients.slice(0, 8).map(client => `<div class="border rounded p-2 bg-gray-50 text-sm">${client.name || client.hostname || client.ip || client.mac || 'Client'} • ${client.ip || client.mac || client.state || 'online'}</div>`).join('') : '<div class="text-sm text-gray-500">No connected client list reported by the configured router.</div>'}
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    el.innerHTML = '<div class="text-sm text-gray-500">No router or network monitor data configured yet. Add a router service or configure HA network data to populate this view.</div>';
   }
 }
 

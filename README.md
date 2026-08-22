@@ -28,6 +28,14 @@ curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/install
 
 4. Default login: admin / admin
 
+Update
+
+```bash
+curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/update.sh | bash
+```
+
+This pulls the latest code from GitHub, updates the Python dependencies if needed, and restarts the service without uninstalling the app.
+
 Uninstall
 
 ```bash

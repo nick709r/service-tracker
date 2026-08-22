@@ -264,6 +264,117 @@ async def _service_status_payload(service: dict):
         return {"status": "unreachable", "error": str(e), "url": url}
 
 
+async def _service_api_headers(service: dict):
+    headers = {}
+    api_key = (service.get("api_key") or "").strip()
+    if not api_key:
+        return headers
+    svc_type = (service.get("type") or "").lower()
+    if svc_type in {"sonarr", "lidarr", "radarr"}:
+        headers["X-Api-Key"] = api_key
+    elif svc_type == "jellyfin":
+        headers["X-Emby-Token"] = api_key
+        headers["Authorization"] = f'MediaBrowser Token="{api_key}", Client="LennyCat", Device="ServiceMonitor"'
+    elif svc_type in {"crafty", "router", "dlink"}:
+        headers["Authorization"] = f"Bearer {api_key}"
+    else:
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
+async def _fetch_json(url: str, headers: dict | None = None, timeout: int = 10):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers or {}, timeout=timeout) as resp:
+                if resp.status >= 400:
+                    return None
+                try:
+                    return await resp.json(content_type=None)
+                except Exception:
+                    text = await resp.text()
+                    return {"raw": text}
+    except Exception:
+        return None
+
+
+async def _service_details_payload(service: dict):
+    svc_type = (service.get("type") or "").lower()
+    url = coerce_service_url(service.get("url"))
+    if not url:
+        return {"status": "no_url", "type": svc_type}
+    headers = await _service_api_headers(service)
+    base = url.rstrip("/")
+
+    async def safe_json(path):
+        return await _fetch_json(f"{base}{path}", headers=headers)
+
+    try:
+        if svc_type in {"sonarr", "lidarr"}:
+            queue = await safe_json("/api/v3/queue") or {}
+            calendar = await safe_json("/api/v3/calendar?startDate=2020-01-01&endDate=2030-12-31") or []
+            queue_items = queue.get("records") if isinstance(queue, dict) else queue or []
+            upcoming = calendar[:5] if isinstance(calendar, list) else []
+            downloads = [item for item in queue_items if str(item.get("status") or "").lower() in {"downloading", "queued", "pending"}]
+            return {
+                "type": svc_type,
+                "status": "ok",
+                "download_count": len(downloads),
+                "queue_total": len(queue_items) if isinstance(queue_items, list) else 0,
+                "downloads": downloads[:5],
+                "upcoming": upcoming[:5],
+            }
+
+        if svc_type == "jellyfin":
+            info = await safe_json("/System/Info") or {}
+            sessions = await safe_json("/Sessions") or []
+            users = await safe_json("/Users") or []
+            counts = await safe_json("/Items/Counts") or {}
+            playing = []
+            for session in sessions if isinstance(sessions, list) else []:
+                item = (session.get("NowPlayingItem") or session.get("NowPlaying")) or {}
+                name = item.get("Name") or item.get("title") or "Unknown"
+                if name:
+                    playing.append({"user": session.get("UserName") or session.get("UserId"), "title": name, "state": session.get("PlayState") or session.get("State") or "playing"})
+            return {
+                "type": svc_type,
+                "status": "ok",
+                "server": info,
+                "sessions": sessions[:5] if isinstance(sessions, list) else [],
+                "playing": playing[:5],
+                "user_count": len(users) if isinstance(users, list) else 0,
+                "counts": counts,
+            }
+
+        if svc_type == "crafty":
+            status = await safe_json("/api/status") or {}
+            servers = await safe_json("/api/servers") or {}
+            return {
+                "type": svc_type,
+                "status": "ok",
+                "status_data": status,
+                "servers": servers,
+            }
+
+        if svc_type in {"router", "dlink"}:
+            traffic = await safe_json("/api/traffic") or {}
+            clients = await safe_json("/api/clients") or []
+            if not traffic and not clients:
+                return {"type": svc_type, "status": "not_supported", "message": "No router API data available at this URL."}
+            return {
+                "type": svc_type,
+                "status": "ok",
+                "download_mbps": traffic.get("download_mbps") or traffic.get("download") or 0,
+                "upload_mbps": traffic.get("upload_mbps") or traffic.get("upload") or 0,
+                "client_count": len(clients) if isinstance(clients, list) else (clients.get("count") if isinstance(clients, dict) else 0),
+                "clients": clients[:10] if isinstance(clients, list) else (clients.get("items")[:10] if isinstance(clients, dict) and isinstance(clients.get("items"), list) else []),
+                "traffic": traffic,
+            }
+
+        return {"type": svc_type, "status": "unsupported"}
+    except Exception:
+        return {"type": svc_type, "status": "error", "message": "Unable to fetch service details"}
+
+
 async def service_monitor_loop():
     while True:
         try:
@@ -441,6 +552,15 @@ async def _agent_dvr_camera_data(base_url: str, api_key: str | None = None):
     return {"cameras": []}
 
 
+@app.get("/api/services/{svc_id}/details")
+async def service_details(svc_id: str):
+    svcs = load_services()
+    for s in svcs:
+        if s.get("id") == svc_id:
+            return await _service_details_payload(s)
+    raise HTTPException(status_code=404, detail="Service not found")
+
+
 @app.get("/api/services/{svc_id}/status")
 async def service_status(svc_id: str):
     svcs = load_services()
@@ -451,6 +571,52 @@ async def service_status(svc_id: str):
                 return {"status": "no_url"}
             return result
     raise HTTPException(status_code=404, detail="Service not found")
+
+
+@app.get("/api/network/summary")
+async def network_summary():
+    services = load_services()
+    router_service = None
+    for service in services:
+        name = (service.get("name") or "").lower()
+        kind = (service.get("type") or "").lower()
+        if kind in {"router", "dlink"} or "router" in name or "dlink" in name:
+            router_service = service
+            break
+
+    summary = {
+        "status": "not_configured",
+        "download_mbps": 0,
+        "upload_mbps": 0,
+        "client_count": 0,
+        "clients": [],
+        "chart": [],
+    }
+
+    if router_service:
+        detail = await _service_details_payload(router_service)
+        if detail.get("status") == "ok":
+            summary = {
+                "status": "ok",
+                "download_mbps": detail.get("download_mbps") or 0,
+                "upload_mbps": detail.get("upload_mbps") or 0,
+                "client_count": detail.get("client_count") or 0,
+                "clients": detail.get("clients") or [],
+                "chart": [
+                    {"label": "Down", "value": float(detail.get("download_mbps") or 0)},
+                    {"label": "Up", "value": float(detail.get("upload_mbps") or 0)},
+                ],
+            }
+
+    ha = load_config().get("home_assistant", {})
+    if ha.get("url") and ha.get("token"):
+        try:
+            network = await home_assistant_network()
+            summary.setdefault("home_assistant", network)
+        except Exception:
+            pass
+
+    return summary
 
 
 @app.get("/api/services/{svc_id}/cameras")
