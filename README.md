@@ -42,11 +42,41 @@ The app checks the HTTP endpoint for each configured service and reports whether
 - Runs as a systemd service at boot
 - One-command installer for Linux servers
 
-## Dashboard and examples
+## Screenshots
+
+The dashboard is designed to be quick to read at a glance, especially on a phone or tablet when you are checking your home services while away from the desktop.
 
 <p align="center">
   <img src="https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80" alt="Home lab server setup" width="1000" />
 </p>
+<p align="center"><em>Home lab overview: the services you depend on in one quick glance.</em></p>
+
+<p align="center">
+  <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80" alt="Server rack dashboard" width="1000" />
+</p>
+<p align="center"><em>Server room view: simple status checks for media and automation services.</em></p>
+
+<p align="center">
+  <img src="https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1200&q=80" alt="Monitoring and health checks" width="1000" />
+</p>
+<p align="center"><em>Service checks are designed for quick monitoring rather than noisy alerting.</em></p>
+
+<p align="center">
+  <img src="https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=80" alt="Home automation and server management" width="1000" />
+</p>
+<p align="center"><em>Keep your media stack and smart home services visible from one place.</em></p>
+
+<p align="center">
+  <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80" alt="Simple admin dashboard" width="1000" />
+</p>
+<p align="center"><em>Quick admin login and configuration before monitoring starts.</em></p>
+
+<p align="center">
+  <img src="https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1200&q=80" alt="Portable monitoring dashboard" width="1000" />
+</p>
+<p align="center"><em>Ideal for a phone, tablet, or laptop when you want a fast health check.</em></p>
+
+## Dashboard and examples
 
 The web UI is kept intentionally simple:
 
