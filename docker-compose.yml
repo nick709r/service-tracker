@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: service-tracker-backend
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /app/data
+      BACKEND_PORT: ${BACKEND_PORT:-6962}
+    volumes:
+      - ./backend/data:/app/data
+    ports:
+      - "${BACKEND_PORT:-6962}:6962"
+    command: uvicorn main:app --host 0.0.0.0 --port 6962
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: service-tracker-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      BACKEND_HOST: backend
+      BACKEND_PORT: ${BACKEND_PORT:-6962}
+    ports:
+      - "${FRONTEND_PORT:-6969}:6969"
