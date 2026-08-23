@@ -4,10 +4,11 @@ from pathlib import Path
 import json
 import asyncio
 import aiohttp
-from passlib.hash import bcrypt
+import bcrypt as bcrypt_lib
 from fastapi.middleware.cors import CORSMiddleware
+import os
 
-DATA_DIR = Path("/app/data")
+DATA_DIR = Path(os.environ.get("SERVICE_TRACKER_DATA_DIR", "/app/data"))
 CONFIG_FILE = DATA_DIR / "config.json"
 SERVICES_FILE = DATA_DIR / "services.json"
 
@@ -15,7 +16,8 @@ app = FastAPI(title="Service Tracker API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # Allow origins can be set via ALLOWED_ORIGINS (comma-separated). Defaults to all for LAN use.
+    allow_origins=[o.strip() for o in os.getenv('ALLOWED_ORIGINS','*').split(',')] ,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,9 +48,12 @@ def load_config():
     ensure_data_dir()
     if not CONFIG_FILE.exists():
         # create default admin/admin
+        # Default admin credentials can be provided via environment variables for deployment convenience.
+        admin_user = os.getenv('ADMIN_USER', 'admin')
+        admin_password = os.getenv('ADMIN_PASSWORD', 'admin')
         default = {
-            "admin_user": "admin",
-            "admin_password_hash": bcrypt.hash("admin"),
+            "admin_user": admin_user,
+            "admin_password_hash": bcrypt_lib.hashpw(admin_password.encode(), bcrypt_lib.gensalt()).decode(),
             "home_assistant": {}
         }
         CONFIG_FILE.write_text(json.dumps(default, indent=2))
@@ -88,7 +93,7 @@ async def startup_event():
 @app.post("/api/login")
 async def login(payload: LoginRequest):
     cfg = load_config()
-    if payload.username == cfg.get("admin_user") and bcrypt.verify(payload.password, cfg.get("admin_password_hash")):
+    if payload.username == cfg.get("admin_user") and bcrypt_lib.checkpw(payload.password.encode(), cfg.get("admin_password_hash").encode()):
         return {"success": True, "username": payload.username}
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -98,9 +103,9 @@ async def change_password(payload: ChangePasswordRequest):
     cfg = load_config()
     if payload.username != cfg.get("admin_user"):
         raise HTTPException(status_code=403, detail="Invalid user")
-    if not bcrypt.verify(payload.current_password, cfg.get("admin_password_hash")):
+    if not bcrypt_lib.checkpw(payload.current_password.encode(), cfg.get("admin_password_hash").encode()):
         raise HTTPException(status_code=403, detail="Current password incorrect")
-    cfg["admin_password_hash"] = bcrypt.hash(payload.new_password)
+    cfg["admin_password_hash"] = bcrypt_lib.hashpw(payload.new_password.encode(), bcrypt_lib.gensalt()).decode()
     save_config(cfg)
     return {"success": True}
 
@@ -166,6 +171,7 @@ async def check_home_assistant():
     token = ha.get("token")
     if not url or not token:
         raise HTTPException(status_code=400, detail="Home Assistant not configured")
+    # Use Bearer token for Home Assistant API requests
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     try:
         async with aiohttp.ClientSession(headers=headers) as session:

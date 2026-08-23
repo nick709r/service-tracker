@@ -1,0 +1,19 @@
+[Unit]
+Description=Service Tracker
+After=network.target
+
+[Service]
+Type=forking
+WorkingDirectory=/opt/service-tracker
+Environment=APP_DIR=/opt/service-tracker
+Environment=FRONTEND_PORT=6969
+Environment=BACKEND_PORT=6962
+Environment=SERVICE_TRACKER_DATA_DIR=/opt/service-tracker/data
+Environment=SERVICE_TRACKER_LOG_DIR=/opt/service-tracker/logs
+ExecStart=/opt/service-tracker/start.sh
+ExecStop=/opt/service-tracker/stop.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="/opt/lennycat-service-monitor"
+APP_DIR="${APP_DIR:-/opt/service-tracker}"
 START_SCRIPT="${APP_DIR}/start.sh"
 STOP_SCRIPT="${APP_DIR}/stop.sh"
-SERVICE_NAME="lennycat-service-monitor"
-REPO_URL="https://github.com/nick709r/service-tracker.git"
+SERVICE_NAME="service-tracker"
 
 if [ ! -d "$APP_DIR" ] || [ ! -f "$START_SCRIPT" ] || [ ! -f "$STOP_SCRIPT" ]; then
-  echo "LennyCat Service Monitor is not installed at $APP_DIR."
+  echo "Service Tracker is not installed at $APP_DIR."
   echo "Run the installer first:"
-  echo "  curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/install.sh | bash"
+  echo "  curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/install.sh | sudo bash"
   exit 1
 fi
 
 if ! command -v git >/dev/null 2>&1; then
-  echo "git is required to update LennyCat Service Monitor."
+  echo "git is required to update Service Tracker."
   exit 1
 fi
 
@@ -44,17 +43,17 @@ if [ -d "$APP_DIR/venv" ]; then
 fi
 
 if command -v systemctl >/dev/null 2>&1 && [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
-  echo "Restarting LennyCat service..."
+  echo "Restarting Service Tracker service..."
   "$STOP_SCRIPT" || true
   systemctl daemon-reload >/dev/null 2>&1 || true
   systemctl restart "$SERVICE_NAME" >/dev/null 2>&1 || true
 else
-  echo "Restarting LennyCat manually..."
+  echo "Restarting Service Tracker manually..."
   "$STOP_SCRIPT" || true
   "$START_SCRIPT"
 fi
 
 echo ""
-echo "LennyCat Service Monitor updated successfully."
+echo "Service Tracker updated successfully."
 echo "Frontend: http://<server-ip>:6969"
 echo "Backend:  http://<server-ip>:6962"

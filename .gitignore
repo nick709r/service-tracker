@@ -5,3 +5,7 @@ node_modules/
 backend/data/
 frontend/dist/
 .DS_Store
+
+venv/
+logs/
+data/

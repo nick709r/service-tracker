@@ -3,31 +3,35 @@
 A simple, mobile-friendly web UI to monitor services on your home server (Sonarr, Lidarr, Transmission, Home Assistant, Agent DVR, and others).
 
 Features
-- FastAPI backend (REST API) to manage services and credentials
-- Static frontend (Tailwind CSS + vanilla JS) for a clean, responsive UI
-- Docker Compose for easy deployment
-- install.sh: one-script installer to set up the app on your server
+- FastAPI backend for service status checks and config
+- Static frontend for the management UI
+- Runs as a systemd service at boot
+- install.sh: one-script installer for your server
 
 Defaults
 - Default admin user: admin
 - Default admin password: admin
 
-Quick install (on your Ubuntu server)
+Quick install
 
-1. Make the install script executable and run it:
+1. Copy the installer to your server, make it executable, and run it:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/nick709r/service-tracker/main/install.sh | sudo bash
 ```
 
-2. The frontend will be available at http://<your-server-ip>:6969 and the backend at http://<your-server-ip>:6962
+2. The app will run as a systemd service and be available at:
 
-Notes for deployment:
-- The project includes a docker-compose.yml and Dockerfiles for the frontend (nginx) and backend (uvicorn). Run `docker compose up -d --build` in the repository root to start both services.
-- By default the frontend listens on port 6969 and the backend on port 6962. To change these, copy .env.example to .env and set FRONTEND_PORT and BACKEND_PORT before running docker compose.
-- Ensure your Linux server firewall allows inbound connections to the chosen FRONTEND_PORT (e.g. 6969) so devices on your local network (phones, laptops) can reach the UI. The backend is proxied by the frontend for browser access; if you need direct API access, open BACKEND_PORT as well.
-- The frontend nginx proxies /api/ requests to the backend container by service name (backend:6962) so both services must be on the same Docker network (the included docker-compose sets that up).
+- Frontend: http://<your-server-ip>:6969
+- Backend: http://<your-server-ip>:6962
 
+Service configuration
+- Frontend port: 6969
+- Backend port: 6962
+- Data directory: /opt/service-tracker/data
+- Logs: /opt/service-tracker/logs
+
+To change the ports before installation, edit the values in the service file or export FRONTEND_PORT and BACKEND_PORT before running the service start script.
 
 Customize
 - Configure services and Home Assistant integration from the web UI after logging in.

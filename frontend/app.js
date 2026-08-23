@@ -1,4 +1,12 @@
-const apiBase = '/api';
+const apiBase = (() => {
+  const configured = (window.SERVICE_TRACKER_BACKEND_URL || '').trim();
+  if (configured) return configured.replace(/\/+$/, '');
+
+  const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+  const host = window.location.hostname || '127.0.0.1';
+  const port = window.location.port === '6969' ? '6962' : (window.location.port || '6962');
+  return `${protocol}://${host}:${port}/api`;
+})();
 let currentUser = null;
 
 async function api(path, opts={}){
