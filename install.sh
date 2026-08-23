@@ -16,4 +16,4 @@ fi
 echo "Starting services with docker-compose..."
 docker-compose up -d --build
 
-echo "Done. Frontend: http://<server-ip>:8080  Backend: http://<server-ip>:8000"
+echo "Done. Frontend: http://<server-ip>:6969  Backend: http://<server-ip>:6962"
