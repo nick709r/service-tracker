@@ -57,4 +57,4 @@ fi
 echo ""
 echo "LennyCat Service Monitor updated successfully."
 echo "Frontend: http://<server-ip>:6969"
-echo "Backend:  http://<server-ip>:6862"
+echo "Backend:  http://<server-ip>:6962"
